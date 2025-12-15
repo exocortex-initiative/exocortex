@@ -1,0 +1,24 @@
+# CodeQL Configuration for Exocortex
+# This configuration excludes false positives for SPARQL 1.1 specification-mandated functions.
+#
+# The SPARQL 1.1 specification (https://www.w3.org/TR/sparql11-query/) requires implementations
+# to support MD5 and SHA1 hash functions for data hashing purposes:
+# - MD5: https://www.w3.org/TR/sparql11-query/#func-md5
+# - SHA1: https://www.w3.org/TR/sparql11-query/#func-sha1
+#
+# These functions are used for data checksums and content identification,
+# NOT for security purposes (passwords, encryption keys, etc.).
+
+name: "Exocortex CodeQL Configuration"
+
+queries:
+  - uses: security-extended
+  - uses: security-and-quality
+
+query-filters:
+  # Exclude weak cryptographic algorithm alerts for SPARQL 1.1 hash functions.
+  # MD5 and SHA1 are required by SPARQL 1.1 specification for data hashing.
+  - exclude:
+      id: js/weak-cryptographic-algorithm
+      paths:
+        - packages/exocortex/src/infrastructure/sparql/filters/BuiltInFunctions.ts

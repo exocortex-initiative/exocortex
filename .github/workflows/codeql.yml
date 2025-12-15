@@ -38,8 +38,8 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
-          # Use default queries plus security-extended
-          queries: security-extended,security-and-quality
+          # Use custom configuration that excludes false positives for SPARQL 1.1 spec-mandated functions
+          config-file: .github/codeql/codeql-config.yml
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3

@@ -3,6 +3,7 @@ import { IRI } from "../../../domain/models/rdf/IRI";
 import { Literal } from "../../../domain/models/rdf/Literal";
 import { BlankNode } from "../../../domain/models/rdf/BlankNode";
 import { v4 as uuidv4 } from "uuid";
+import * as crypto from "crypto";
 
 export type RDFTerm = Subject | Predicate | RDFObject;
 
@@ -640,11 +641,16 @@ export class BuiltInFunctions {
   /**
    * SPARQL 1.1 RAND function.
    * Returns a pseudo-random number between 0 (inclusive) and 1 (exclusive).
+   * Uses cryptographically secure random bytes for better randomness.
    *
    * @returns Random number in range [0, 1)
    */
   static rand(): number {
-    return Math.random();
+    // Use 4 bytes (32 bits) to generate a random number in [0, 1)
+    const randomBytes = crypto.randomBytes(4);
+    const randomUint32 = randomBytes.readUInt32BE(0);
+    // Divide by 2^32 to get a number in [0, 1)
+    return randomUint32 / 0x100000000;
   }
 
   // SPARQL 1.1 Conditional Functions
@@ -764,10 +770,15 @@ export class BuiltInFunctions {
 
   // SPARQL 1.1 Hash Functions
   // https://www.w3.org/TR/sparql11-query/#func-hash
+  // NOTE: MD5 and SHA1 are required by SPARQL 1.1 specification for data hashing.
+  // These are NOT used for security purposes (passwords, encryption keys, etc.).
 
   /**
    * SPARQL 1.1 MD5 function.
    * Returns the MD5 checksum, as a hex digit string.
+   *
+   * NOTE: MD5 is cryptographically weak but required by SPARQL 1.1 specification
+   * for data hashing purposes (not security). See: https://www.w3.org/TR/sparql11-query/#func-md5
    *
    * @param str - String to hash
    * @returns Lowercase hex string of MD5 hash
@@ -775,8 +786,6 @@ export class BuiltInFunctions {
    * Example: MD5("test") = "098f6bcd4621d373cade4e832627b4f6"
    */
   static md5(str: string): string {
-    // Use Web Crypto API compatible implementation via Node.js crypto
-    const crypto = require("crypto");
     return crypto.createHash("md5").update(str).digest("hex");
   }
 
@@ -784,13 +793,15 @@ export class BuiltInFunctions {
    * SPARQL 1.1 SHA1 function.
    * Returns the SHA1 checksum, as a hex digit string.
    *
+   * NOTE: SHA1 is cryptographically weak but required by SPARQL 1.1 specification
+   * for data hashing purposes (not security). See: https://www.w3.org/TR/sparql11-query/#func-sha1
+   *
    * @param str - String to hash
    * @returns Lowercase hex string of SHA1 hash
    *
    * Example: SHA1("test") = "a94a8fe5ccb19ba61c4c0873d391e987982fbbd3"
    */
   static sha1(str: string): string {
-    const crypto = require("crypto");
     return crypto.createHash("sha1").update(str).digest("hex");
   }
 
@@ -804,7 +815,6 @@ export class BuiltInFunctions {
    * Example: SHA256("test") = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
    */
   static sha256(str: string): string {
-    const crypto = require("crypto");
     return crypto.createHash("sha256").update(str).digest("hex");
   }
 
@@ -816,7 +826,6 @@ export class BuiltInFunctions {
    * @returns Lowercase hex string of SHA384 hash
    */
   static sha384(str: string): string {
-    const crypto = require("crypto");
     return crypto.createHash("sha384").update(str).digest("hex");
   }
 
@@ -828,7 +837,6 @@ export class BuiltInFunctions {
    * @returns Lowercase hex string of SHA512 hash
    */
   static sha512(str: string): string {
-    const crypto = require("crypto");
     return crypto.createHash("sha512").update(str).digest("hex");
   }
 
@@ -971,8 +979,8 @@ export class BuiltInFunctions {
   static bnode(label?: RDFTerm | undefined): BlankNode {
     // No argument - generate unique blank node
     if (label === undefined) {
-      // Generate a unique ID using random component
-      const uniqueId = `b${Math.random().toString(36).substring(2, 11)}`;
+      // Generate a unique ID using cryptographically secure random bytes
+      const uniqueId = `b${crypto.randomBytes(8).toString("hex")}`;
       return new BlankNode(uniqueId);
     }
 
