@@ -578,9 +578,12 @@ export class FilterExecutor {
         return BuiltInFunctions.seconds(secondsDate);
 
       case "timezone":
+        const timezoneDate = this.getStringValue(this.evaluateExpression(expr.args[0], solution));
+        return BuiltInFunctions.timezone(timezoneDate);
+
       case "tz":
         const tzDate = this.getStringValue(this.evaluateExpression(expr.args[0], solution));
-        return BuiltInFunctions.timezone(tzDate);
+        return BuiltInFunctions.tz(tzDate);
 
       case "now":
         return BuiltInFunctions.now();
