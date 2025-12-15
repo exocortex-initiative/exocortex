@@ -1082,33 +1082,43 @@ describe("BuiltInFunctions", () => {
     });
 
     describe("TZ", () => {
-      it("should return Z for UTC", () => {
+      it("should return PT0S for UTC (Z)", () => {
         const result = BuiltInFunctions.tz("2025-01-01T12:00:00Z");
-        expect(result).toBe("Z");
+        expect(result).toBeInstanceOf(Literal);
+        expect(result.value).toBe("PT0S");
+        expect(result.datatype?.value).toBe("http://www.w3.org/2001/XMLSchema#dayTimeDuration");
       });
 
-      it("should return positive offset string", () => {
+      it("should return positive duration for positive offset", () => {
         const result = BuiltInFunctions.tz("2025-01-01T12:00:00+05:00");
-        expect(result).toBe("+05:00");
+        expect(result).toBeInstanceOf(Literal);
+        expect(result.value).toBe("PT5H");
+        expect(result.datatype?.value).toBe("http://www.w3.org/2001/XMLSchema#dayTimeDuration");
       });
 
-      it("should return negative offset string", () => {
-        const result = BuiltInFunctions.tz("2025-01-01T12:00:00-08:30");
-        expect(result).toBe("-08:30");
+      it("should return negative duration for negative offset", () => {
+        const result = BuiltInFunctions.tz("2025-01-01T12:00:00-08:00");
+        expect(result).toBeInstanceOf(Literal);
+        expect(result.value).toBe("-PT8H");
+        expect(result.datatype?.value).toBe("http://www.w3.org/2001/XMLSchema#dayTimeDuration");
       });
 
-      it("should return empty string when no timezone", () => {
-        const result = BuiltInFunctions.tz("2025-01-01T12:00:00");
-        expect(result).toBe("");
+      it("should handle offset with minutes", () => {
+        const result = BuiltInFunctions.tz("2025-01-01T12:00:00+05:30");
+        expect(result).toBeInstanceOf(Literal);
+        expect(result.value).toBe("PT5H30M");
+        expect(result.datatype?.value).toBe("http://www.w3.org/2001/XMLSchema#dayTimeDuration");
       });
 
-      it("should return empty string for date without time", () => {
-        const result = BuiltInFunctions.tz("2025-01-01");
-        expect(result).toBe("");
+      it("should handle negative offset with minutes", () => {
+        const result = BuiltInFunctions.tz("2025-01-01T12:00:00-09:45");
+        expect(result).toBeInstanceOf(Literal);
+        expect(result.value).toBe("-PT9H45M");
+        expect(result.datatype?.value).toBe("http://www.w3.org/2001/XMLSchema#dayTimeDuration");
       });
 
       it("should throw for invalid date", () => {
-        expect(() => BuiltInFunctions.tz("invalid")).toThrow("TZ: invalid date string");
+        expect(() => BuiltInFunctions.tz("invalid")).toThrow("TIMEZONE: invalid date string");
       });
     });
 

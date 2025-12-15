@@ -580,43 +580,20 @@ export class BuiltInFunctions {
    * SPARQL 1.1 TZ function.
    * https://www.w3.org/TR/sparql11-query/#func-tz
    *
-   * Returns the timezone part of a dateTime as a simple literal (string).
-   * Returns the empty string if there is no timezone.
+   * Returns the timezone part of a dateTime as an xsd:dayTimeDuration literal.
+   * This is a convenience alias for TIMEZONE() that returns the same typed duration.
    *
    * @param dateStr - dateTime string
-   * @returns String representation of timezone, or empty string if no timezone
+   * @returns Literal with xsd:dayTimeDuration datatype
    *
    * Examples:
-   * - TZ("2025-01-01T12:00:00Z") → "Z"
-   * - TZ("2025-01-01T12:00:00+05:00") → "+05:00"
-   * - TZ("2025-01-01T12:00:00-08:30") → "-08:30"
-   * - TZ("2025-01-01T12:00:00") → "" (no timezone)
+   * - TZ("2025-01-01T12:00:00Z") → "PT0S"^^xsd:dayTimeDuration
+   * - TZ("2025-01-01T12:00:00+05:00") → "PT5H"^^xsd:dayTimeDuration
+   * - TZ("2025-01-01T12:00:00-08:00") → "-PT8H"^^xsd:dayTimeDuration
+   * - TZ("2025-01-01T12:00:00+05:30") → "PT5H30M"^^xsd:dayTimeDuration
    */
-  static tz(dateStr: string): string {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) {
-      throw new Error(`TZ: invalid date string '${dateStr}'`);
-    }
-
-    // Check for Z (UTC)
-    if (dateStr.endsWith("Z")) {
-      return "Z";
-    }
-
-    // Check for explicit timezone offset (e.g., +05:00, -08:30)
-    const tzMatch = dateStr.match(/([+-]\d{2}:\d{2})$/);
-    if (tzMatch) {
-      return tzMatch[1];
-    }
-
-    // Check for timezone offset without colon (e.g., +0500, -0830)
-    const tzMatchNoColon = dateStr.match(/([+-])(\d{2})(\d{2})$/);
-    if (tzMatchNoColon) {
-      return `${tzMatchNoColon[1]}${tzMatchNoColon[2]}:${tzMatchNoColon[3]}`;
-    }
-
-    // No timezone - return empty string
-    return "";
+  static tz(dateStr: string): Literal {
+    return this.timezone(dateStr);
   }
 
   /**
