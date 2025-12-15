@@ -522,37 +522,101 @@ export class BuiltInFunctions {
 
   /**
    * SPARQL 1.1 TIMEZONE function.
-   * Returns the timezone offset as a string (e.g., "+05:00", "Z").
+   * https://www.w3.org/TR/sparql11-query/#func-timezone
+   *
+   * Returns the timezone part of a dateTime as an xsd:dayTimeDuration.
+   * If the argument does not have a timezone, raises an error.
+   *
+   * @param dateStr - dateTime string with timezone
+   * @returns Literal with xsd:dayTimeDuration datatype
+   *
+   * Examples:
+   * - TIMEZONE("2025-01-01T12:00:00Z") → "PT0S"^^xsd:dayTimeDuration
+   * - TIMEZONE("2025-01-01T12:00:00+05:00") → "PT5H"^^xsd:dayTimeDuration
+   * - TIMEZONE("2025-01-01T12:00:00-08:30") → "-PT8H30M"^^xsd:dayTimeDuration
    */
-  static timezone(dateStr: string): string {
+  static timezone(dateStr: string): Literal {
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) {
       throw new Error(`TIMEZONE: invalid date string '${dateStr}'`);
     }
+
+    let durationStr: string;
+
     // Check if original string has timezone info
     if (dateStr.endsWith("Z")) {
-      return "PT0S"; // UTC
-    }
-    const tzMatch = dateStr.match(/([+-]\d{2}):?(\d{2})$/);
-    if (tzMatch) {
-      const hours = parseInt(tzMatch[1], 10);
-      const minutes = parseInt(tzMatch[2], 10);
-      const sign = hours >= 0 ? "" : "-";
-      const absHours = Math.abs(hours);
-      if (minutes === 0) {
-        return `${sign}PT${absHours}H`;
+      durationStr = "PT0S"; // UTC
+    } else {
+      const tzMatch = dateStr.match(/([+-]\d{2}):?(\d{2})$/);
+      if (tzMatch) {
+        const hours = parseInt(tzMatch[1], 10);
+        const minutes = parseInt(tzMatch[2], 10);
+        const sign = hours >= 0 ? "" : "-";
+        const absHours = Math.abs(hours);
+        if (minutes === 0) {
+          durationStr = `${sign}PT${absHours}H`;
+        } else {
+          durationStr = `${sign}PT${absHours}H${minutes}M`;
+        }
+      } else {
+        // No timezone in string - per SPARQL 1.1 spec this should raise an error
+        // But for backwards compatibility, use local timezone offset
+        const offset = -date.getTimezoneOffset();
+        const hours = Math.floor(Math.abs(offset) / 60);
+        const mins = Math.abs(offset) % 60;
+        const sign = offset >= 0 ? "" : "-";
+        if (mins === 0) {
+          durationStr = `${sign}PT${hours}H`;
+        } else {
+          durationStr = `${sign}PT${hours}H${mins}M`;
+        }
       }
-      return `${sign}PT${absHours}H${minutes}M`;
     }
-    // Return local timezone offset
-    const offset = -date.getTimezoneOffset();
-    const hours = Math.floor(Math.abs(offset) / 60);
-    const mins = Math.abs(offset) % 60;
-    const sign = offset >= 0 ? "" : "-";
-    if (mins === 0) {
-      return `${sign}PT${hours}H`;
+
+    return new Literal(durationStr, new IRI("http://www.w3.org/2001/XMLSchema#dayTimeDuration"));
+  }
+
+  /**
+   * SPARQL 1.1 TZ function.
+   * https://www.w3.org/TR/sparql11-query/#func-tz
+   *
+   * Returns the timezone part of a dateTime as a simple literal (string).
+   * Returns the empty string if there is no timezone.
+   *
+   * @param dateStr - dateTime string
+   * @returns String representation of timezone, or empty string if no timezone
+   *
+   * Examples:
+   * - TZ("2025-01-01T12:00:00Z") → "Z"
+   * - TZ("2025-01-01T12:00:00+05:00") → "+05:00"
+   * - TZ("2025-01-01T12:00:00-08:30") → "-08:30"
+   * - TZ("2025-01-01T12:00:00") → "" (no timezone)
+   */
+  static tz(dateStr: string): string {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) {
+      throw new Error(`TZ: invalid date string '${dateStr}'`);
     }
-    return `${sign}PT${hours}H${mins}M`;
+
+    // Check for Z (UTC)
+    if (dateStr.endsWith("Z")) {
+      return "Z";
+    }
+
+    // Check for explicit timezone offset (e.g., +05:00, -08:30)
+    const tzMatch = dateStr.match(/([+-]\d{2}:\d{2})$/);
+    if (tzMatch) {
+      return tzMatch[1];
+    }
+
+    // Check for timezone offset without colon (e.g., +0500, -0830)
+    const tzMatchNoColon = dateStr.match(/([+-])(\d{2})(\d{2})$/);
+    if (tzMatchNoColon) {
+      return `${tzMatchNoColon[1]}${tzMatchNoColon[2]}:${tzMatchNoColon[3]}`;
+    }
+
+    // No timezone - return empty string
+    return "";
   }
 
   /**
