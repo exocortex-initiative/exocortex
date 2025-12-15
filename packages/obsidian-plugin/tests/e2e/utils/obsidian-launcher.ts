@@ -123,7 +123,8 @@ export class ObsidianLauncher {
     const maxPolls = 60;
     let appFound = false;
 
-    while (pollCount < maxPolls && !appFound) {
+    // Poll for Obsidian app to be ready (using break to exit, appFound used for post-loop check)
+    while (pollCount < maxPolls) {
       const pollResult = await this.window.evaluate(() => {
         const win = window as any;
         return {

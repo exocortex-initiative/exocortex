@@ -18,6 +18,7 @@ paths-ignore:
   - "**/*.test.tsx"
   - "**/*.spec.ts"
   - "packages/obsidian-plugin/main.js"  # Generated bundled output
+  - "**/test-vault/**"  # E2E test vault with bundled plugin artifacts
 
 # Query filters to suppress intentional false positives
 query-filters:
