@@ -279,22 +279,75 @@ export class FilterExecutor {
    * Evaluate arithmetic expression (+, -, *, /).
    * Supports:
    * - Numeric arithmetic
-   * - xsd:dateTime subtraction (returns difference in milliseconds as number)
+   * - xsd:dateTime subtraction → xsd:dayTimeDuration
+   * - xsd:dateTime +/- xsd:dayTimeDuration → xsd:dateTime
+   * - xsd:dayTimeDuration +/- xsd:dayTimeDuration → xsd:dayTimeDuration
+   * - xsd:dayTimeDuration * number → xsd:dayTimeDuration
+   * - xsd:dayTimeDuration / number → xsd:dayTimeDuration
    */
-  private evaluateArithmetic(expr: ArithmeticExpression, solution: SolutionMapping): number {
+  private evaluateArithmetic(expr: ArithmeticExpression, solution: SolutionMapping): number | Literal {
     const left = this.evaluateExpression(expr.left, solution);
     const right = this.evaluateExpression(expr.right, solution);
 
+    // Special handling for dateTime subtraction → returns xsd:dayTimeDuration
+    if (expr.operator === "-" && this.isDateTimeValue(left) && this.isDateTimeValue(right)) {
+      const leftStr = this.getStringValue(left);
+      const rightStr = this.getStringValue(right);
+      return BuiltInFunctions.subtractDateTimes(leftStr, rightStr);
+    }
+
+    // Special handling for dateTime + duration → returns xsd:dateTime
+    if (expr.operator === "+" && this.isDateTimeValue(left) && this.isDurationValue(right)) {
+      const leftStr = this.getStringValue(left);
+      const rightStr = this.getStringValue(right);
+      return BuiltInFunctions.addDurationToDateTime(leftStr, rightStr);
+    }
+
+    // Special handling for dateTime - duration → returns xsd:dateTime
+    if (expr.operator === "-" && this.isDateTimeValue(left) && this.isDurationValue(right)) {
+      const leftStr = this.getStringValue(left);
+      const rightStr = this.getStringValue(right);
+      return BuiltInFunctions.subtractDurationFromDateTime(leftStr, rightStr);
+    }
+
+    // Special handling for duration + duration → returns xsd:dayTimeDuration
+    if (expr.operator === "+" && this.isDurationValue(left) && this.isDurationValue(right)) {
+      const leftStr = this.getStringValue(left);
+      const rightStr = this.getStringValue(right);
+      return BuiltInFunctions.addDurations(leftStr, rightStr);
+    }
+
+    // Special handling for duration - duration → returns xsd:dayTimeDuration
+    if (expr.operator === "-" && this.isDurationValue(left) && this.isDurationValue(right)) {
+      const leftStr = this.getStringValue(left);
+      const rightStr = this.getStringValue(right);
+      return BuiltInFunctions.subtractDurations(leftStr, rightStr);
+    }
+
+    // Special handling for duration * number → returns xsd:dayTimeDuration
+    if (expr.operator === "*" && this.isDurationValue(left)) {
+      const leftStr = this.getStringValue(left);
+      const rightNum = this.toNumericValue(right);
+      return BuiltInFunctions.multiplyDuration(leftStr, rightNum);
+    }
+
+    // Special handling for number * duration → returns xsd:dayTimeDuration
+    if (expr.operator === "*" && this.isDurationValue(right)) {
+      const leftNum = this.toNumericValue(left);
+      const rightStr = this.getStringValue(right);
+      return BuiltInFunctions.multiplyDuration(rightStr, leftNum);
+    }
+
+    // Special handling for duration / number → returns xsd:dayTimeDuration
+    if (expr.operator === "/" && this.isDurationValue(left)) {
+      const leftStr = this.getStringValue(left);
+      const rightNum = this.toNumericValue(right);
+      return BuiltInFunctions.divideDuration(leftStr, rightNum);
+    }
+
+    // Standard numeric arithmetic
     const leftNum = this.toNumericValue(left);
     const rightNum = this.toNumericValue(right);
-
-    // Special handling for dateTime subtraction
-    if (expr.operator === "-" && this.isDateTimeValue(left) && this.isDateTimeValue(right)) {
-      const leftMs = this.parseDateTimeToMs(left);
-      const rightMs = this.parseDateTimeToMs(right);
-      // Return difference in milliseconds (positive value)
-      return leftMs - rightMs;
-    }
 
     switch (expr.operator) {
       case "+":
@@ -377,6 +430,26 @@ export class FilterExecutor {
     if (typeof value === "string") {
       const datePattern = /^\d{4}-\d{2}-\d{2}(T|\s)/;
       return datePattern.test(value);
+    }
+    return false;
+  }
+
+  /**
+   * Check if a value represents an xsd:dayTimeDuration.
+   */
+  private isDurationValue(value: any): boolean {
+    if (value instanceof Literal) {
+      const datatypeValue = value.datatype?.value || "";
+      if (datatypeValue.includes("#dayTimeDuration")) {
+        return true;
+      }
+      // Try to detect ISO 8601 duration format: [-]P[nD][T[nH][nM][n.nS]]
+      const durationPattern = /^-?P(\d+D)?(T(\d+H)?(\d+M)?(\d+(\.\d+)?S)?)?$/;
+      return durationPattern.test(value.value);
+    }
+    if (typeof value === "string") {
+      const durationPattern = /^-?P(\d+D)?(T(\d+H)?(\d+M)?(\d+(\.\d+)?S)?)?$/;
+      return durationPattern.test(value);
     }
     return false;
   }
@@ -714,6 +787,124 @@ export class FilterExecutor {
       // Resolves UUID to full file path URI using O(1) index lookup
       case "byuuid":
         return this.evaluateByUUID(expr, solution);
+
+      // SPARQL 1.1 xsd:dayTimeDuration Functions
+      // https://www.w3.org/TR/xpath-functions/#dt-dayTimeDuration
+
+      // xsd:dayTimeDuration constructor - creates duration from ISO 8601 string
+      case "daytimeduration":
+      case "xsd:daytimeduration": {
+        const durationValue = this.evaluateExpression(expr.args[0], solution);
+        return BuiltInFunctions.xsdDayTimeDuration(this.getStringValue(durationValue));
+      }
+
+      // Check if value is a dayTimeDuration
+      case "isdaytimeduration": {
+        const isDurationArg = this.getTermFromExpression(expr.args[0], solution);
+        return BuiltInFunctions.isDayTimeDuration(isDurationArg);
+      }
+
+      // Subtract two dateTimes to get a duration
+      case "subtractdatetimes": {
+        const dt1 = this.getStringValue(this.evaluateExpression(expr.args[0], solution));
+        const dt2 = this.getStringValue(this.evaluateExpression(expr.args[1], solution));
+        return BuiltInFunctions.subtractDateTimes(dt1, dt2);
+      }
+
+      // Add duration to dateTime
+      case "adddurationtodatetime": {
+        const dtArg = this.getStringValue(this.evaluateExpression(expr.args[0], solution));
+        const durArg = this.getStringValue(this.evaluateExpression(expr.args[1], solution));
+        return BuiltInFunctions.addDurationToDateTime(dtArg, durArg);
+      }
+
+      // Subtract duration from dateTime
+      case "subtractdurationfromdatetime": {
+        const dtArg = this.getStringValue(this.evaluateExpression(expr.args[0], solution));
+        const durArg = this.getStringValue(this.evaluateExpression(expr.args[1], solution));
+        return BuiltInFunctions.subtractDurationFromDateTime(dtArg, durArg);
+      }
+
+      // Add two durations
+      case "adddurations": {
+        const dur1Arg = this.getStringValue(this.evaluateExpression(expr.args[0], solution));
+        const dur2Arg = this.getStringValue(this.evaluateExpression(expr.args[1], solution));
+        return BuiltInFunctions.addDurations(dur1Arg, dur2Arg);
+      }
+
+      // Subtract durations
+      case "subtractdurations": {
+        const dur1Arg = this.getStringValue(this.evaluateExpression(expr.args[0], solution));
+        const dur2Arg = this.getStringValue(this.evaluateExpression(expr.args[1], solution));
+        return BuiltInFunctions.subtractDurations(dur1Arg, dur2Arg);
+      }
+
+      // Multiply duration by scalar
+      case "multiplyduration": {
+        const durArg = this.getStringValue(this.evaluateExpression(expr.args[0], solution));
+        const scalarArg = Number(this.evaluateExpression(expr.args[1], solution));
+        return BuiltInFunctions.multiplyDuration(durArg, scalarArg);
+      }
+
+      // Divide duration by scalar
+      case "divideduration": {
+        const durArg = this.getStringValue(this.evaluateExpression(expr.args[0], solution));
+        const scalarArg = Number(this.evaluateExpression(expr.args[1], solution));
+        return BuiltInFunctions.divideDuration(durArg, scalarArg);
+      }
+
+      // Compare durations
+      case "comparedurations": {
+        const dur1Arg = this.getStringValue(this.evaluateExpression(expr.args[0], solution));
+        const dur2Arg = this.getStringValue(this.evaluateExpression(expr.args[1], solution));
+        return BuiltInFunctions.compareDurations(dur1Arg, dur2Arg);
+      }
+
+      // Extract days component from duration
+      case "days-from-duration":
+      case "daysfromduration": {
+        const durArg = this.getStringValue(this.evaluateExpression(expr.args[0], solution));
+        return BuiltInFunctions.daysFromDuration(durArg);
+      }
+
+      // Extract hours component from duration
+      case "hours-from-duration":
+      case "hoursfromduration": {
+        const durArg = this.getStringValue(this.evaluateExpression(expr.args[0], solution));
+        return BuiltInFunctions.hoursFromDuration(durArg);
+      }
+
+      // Extract minutes component from duration
+      case "minutes-from-duration":
+      case "minutesfromduration": {
+        const durArg = this.getStringValue(this.evaluateExpression(expr.args[0], solution));
+        return BuiltInFunctions.minutesFromDuration(durArg);
+      }
+
+      // Extract seconds component from duration
+      case "seconds-from-duration":
+      case "secondsfromduration": {
+        const durArg = this.getStringValue(this.evaluateExpression(expr.args[0], solution));
+        return BuiltInFunctions.secondsFromDuration(durArg);
+      }
+
+      // Convert duration to total seconds
+      case "durationtoseconds": {
+        const durArg = this.getStringValue(this.evaluateExpression(expr.args[0], solution));
+        return BuiltInFunctions.durationToSeconds(durArg);
+      }
+
+      // Convert duration to total minutes
+      case "durationtominutes": {
+        const durArg = this.getStringValue(this.evaluateExpression(expr.args[0], solution));
+        return BuiltInFunctions.durationToMinutes(durArg);
+      }
+
+      // Convert duration to total hours
+      case "durationtohours": {
+        const durArg = this.getStringValue(this.evaluateExpression(expr.args[0], solution));
+        return BuiltInFunctions.durationToHours(durArg);
+      }
 
       default:
         throw new FilterExecutorError(`Unknown function: ${funcName}`);

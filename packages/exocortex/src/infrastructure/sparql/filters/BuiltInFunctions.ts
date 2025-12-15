@@ -2,6 +2,7 @@ import type { Subject, Predicate, Object as RDFObject } from "../../../domain/mo
 import { IRI } from "../../../domain/models/rdf/IRI";
 import { Literal } from "../../../domain/models/rdf/Literal";
 import { BlankNode } from "../../../domain/models/rdf/BlankNode";
+import { Duration, XSD_DAYTIME_DURATION } from "../../../domain/models/rdf/Duration";
 import { v4 as uuidv4 } from "uuid";
 
 export type RDFTerm = Subject | Predicate | RDFObject;
@@ -208,10 +209,27 @@ export class BuiltInFunctions {
 
     if (value instanceof Literal) {
       const datatype = value.datatype?.value;
+      // Handle numeric datatypes
       if (datatype?.includes("#integer") || datatype?.includes("#decimal") || datatype?.includes("#double")) {
         const num = parseFloat(value.value);
         if (!isNaN(num)) {
           return num;
+        }
+      }
+      // Handle dayTimeDuration - convert to total milliseconds for comparison
+      if (datatype?.includes("#dayTimeDuration")) {
+        try {
+          const duration = Duration.parse(value.value);
+          return duration.totalMilliseconds;
+        } catch {
+          return value.value;
+        }
+      }
+      // Handle dateTime - convert to milliseconds for comparison
+      if (datatype?.includes("#dateTime") || datatype?.includes("#date")) {
+        const date = new Date(value.value);
+        if (!isNaN(date.getTime())) {
+          return date.getTime();
         }
       }
       return value.value;
@@ -1210,5 +1228,285 @@ export class BuiltInFunctions {
   static struuid(): Literal {
     const uuid = uuidv4();
     return new Literal(uuid);
+  }
+
+  // =========================================================================
+  // xsd:dayTimeDuration Functions (SPARQL 1.1)
+  // https://www.w3.org/TR/xpath-functions/#dt-dayTimeDuration
+  // =========================================================================
+
+  /**
+   * XSD dayTimeDuration constructor/cast function.
+   * https://www.w3.org/TR/xpath-functions/#dt-dayTimeDuration
+   *
+   * Parses a duration string in ISO 8601 format and returns an xsd:dayTimeDuration Literal.
+   * Format: [-]P[nD][T[nH][nM][n.nS]]
+   *
+   * @param value - String representation of duration
+   * @returns Literal with xsd:dayTimeDuration datatype
+   *
+   * Examples:
+   * - xsd:dayTimeDuration("PT5H") → 5 hours
+   * - xsd:dayTimeDuration("-PT8H30M") → -8 hours 30 minutes
+   * - xsd:dayTimeDuration("P1DT2H") → 1 day 2 hours
+   * - xsd:dayTimeDuration("PT0S") → zero duration
+   */
+  static xsdDayTimeDuration(value: string): Literal {
+    const duration = Duration.parse(value);
+    return duration.toLiteral();
+  }
+
+  /**
+   * Parse a dayTimeDuration string to a Duration object.
+   * Internal helper for duration arithmetic.
+   *
+   * @param value - Duration string or Literal
+   * @returns Duration object
+   */
+  static parseDuration(value: string | Literal): Duration {
+    const str = value instanceof Literal ? value.value : value;
+    return Duration.parse(str);
+  }
+
+  /**
+   * Check if a value is an xsd:dayTimeDuration.
+   *
+   * @param term - RDF term to check
+   * @returns true if term is an xsd:dayTimeDuration literal
+   */
+  static isDayTimeDuration(term: RDFTerm | undefined): boolean {
+    if (term === undefined) {
+      return false;
+    }
+    if (!(term instanceof Literal)) {
+      return false;
+    }
+    const datatype = term.datatype?.value;
+    return datatype === XSD_DAYTIME_DURATION;
+  }
+
+  /**
+   * Subtract two dateTime values and return an xsd:dayTimeDuration.
+   * SPARQL 1.1 Section 17.4.5.4: op:subtract-dateTimes
+   *
+   * @param dateTime1 - First dateTime string
+   * @param dateTime2 - Second dateTime string
+   * @returns Literal with xsd:dayTimeDuration datatype representing (dateTime1 - dateTime2)
+   *
+   * Example:
+   * - subtractDateTimes("2025-01-02T12:00:00Z", "2025-01-01T12:00:00Z") → "P1D"
+   */
+  static subtractDateTimes(dateTime1: string, dateTime2: string): Literal {
+    const d1 = new Date(dateTime1);
+    const d2 = new Date(dateTime2);
+
+    if (isNaN(d1.getTime())) {
+      throw new Error(`subtractDateTimes: invalid first dateTime '${dateTime1}'`);
+    }
+    if (isNaN(d2.getTime())) {
+      throw new Error(`subtractDateTimes: invalid second dateTime '${dateTime2}'`);
+    }
+
+    const duration = Duration.fromDateDiff(d1, d2);
+    return duration.toLiteral();
+  }
+
+  /**
+   * Add a duration to a dateTime, returning a new dateTime.
+   * SPARQL 1.1 Section 17.4.5.1: op:add-dayTimeDuration-to-dateTime
+   *
+   * @param dateTimeStr - dateTime string
+   * @param durationStr - dayTimeDuration string
+   * @returns Literal with xsd:dateTime datatype
+   *
+   * Example:
+   * - addDurationToDateTime("2025-01-01T12:00:00Z", "P1D") → "2025-01-02T12:00:00Z"
+   */
+  static addDurationToDateTime(dateTimeStr: string, durationStr: string): Literal {
+    const date = new Date(dateTimeStr);
+    if (isNaN(date.getTime())) {
+      throw new Error(`addDurationToDateTime: invalid dateTime '${dateTimeStr}'`);
+    }
+
+    const duration = Duration.parse(durationStr);
+    const result = duration.addToDate(date);
+
+    return new Literal(result.toISOString(), new IRI("http://www.w3.org/2001/XMLSchema#dateTime"));
+  }
+
+  /**
+   * Subtract a duration from a dateTime, returning a new dateTime.
+   * SPARQL 1.1 Section 17.4.5.2: op:subtract-dayTimeDuration-from-dateTime
+   *
+   * @param dateTimeStr - dateTime string
+   * @param durationStr - dayTimeDuration string
+   * @returns Literal with xsd:dateTime datatype
+   *
+   * Example:
+   * - subtractDurationFromDateTime("2025-01-02T12:00:00Z", "P1D") → "2025-01-01T12:00:00Z"
+   */
+  static subtractDurationFromDateTime(dateTimeStr: string, durationStr: string): Literal {
+    const date = new Date(dateTimeStr);
+    if (isNaN(date.getTime())) {
+      throw new Error(`subtractDurationFromDateTime: invalid dateTime '${dateTimeStr}'`);
+    }
+
+    const duration = Duration.parse(durationStr);
+    const result = duration.subtractFromDate(date);
+
+    return new Literal(result.toISOString(), new IRI("http://www.w3.org/2001/XMLSchema#dateTime"));
+  }
+
+  /**
+   * Add two durations together.
+   * SPARQL 1.1 Section 17.4.5.3: op:add-dayTimeDurations
+   *
+   * @param duration1Str - First duration string
+   * @param duration2Str - Second duration string
+   * @returns Literal with xsd:dayTimeDuration datatype
+   */
+  static addDurations(duration1Str: string, duration2Str: string): Literal {
+    const d1 = Duration.parse(duration1Str);
+    const d2 = Duration.parse(duration2Str);
+    return d1.add(d2).toLiteral();
+  }
+
+  /**
+   * Subtract one duration from another.
+   * SPARQL 1.1 Section 17.4.5.3: op:subtract-dayTimeDurations
+   *
+   * @param duration1Str - First duration string
+   * @param duration2Str - Second duration string
+   * @returns Literal with xsd:dayTimeDuration datatype representing (duration1 - duration2)
+   */
+  static subtractDurations(duration1Str: string, duration2Str: string): Literal {
+    const d1 = Duration.parse(duration1Str);
+    const d2 = Duration.parse(duration2Str);
+    return d1.subtract(d2).toLiteral();
+  }
+
+  /**
+   * Multiply a duration by a scalar.
+   * SPARQL 1.1 Section 17.4.5.5: op:multiply-dayTimeDuration
+   *
+   * @param durationStr - Duration string
+   * @param scalar - Numeric multiplier
+   * @returns Literal with xsd:dayTimeDuration datatype
+   */
+  static multiplyDuration(durationStr: string, scalar: number): Literal {
+    const duration = Duration.parse(durationStr);
+    return duration.multiply(scalar).toLiteral();
+  }
+
+  /**
+   * Divide a duration by a scalar.
+   * SPARQL 1.1 Section 17.4.5.6: op:divide-dayTimeDuration
+   *
+   * @param durationStr - Duration string
+   * @param scalar - Numeric divisor
+   * @returns Literal with xsd:dayTimeDuration datatype
+   */
+  static divideDuration(durationStr: string, scalar: number): Literal {
+    const duration = Duration.parse(durationStr);
+    return duration.divide(scalar).toLiteral();
+  }
+
+  /**
+   * Compare two durations.
+   * Returns negative if d1 < d2, 0 if equal, positive if d1 > d2.
+   *
+   * @param duration1Str - First duration string
+   * @param duration2Str - Second duration string
+   * @returns Comparison result (-1, 0, or 1)
+   */
+  static compareDurations(duration1Str: string, duration2Str: string): number {
+    const d1 = Duration.parse(duration1Str);
+    const d2 = Duration.parse(duration2Str);
+    const diff = d1.compareTo(d2);
+    return diff < 0 ? -1 : diff > 0 ? 1 : 0;
+  }
+
+  /**
+   * Get the days component of a dayTimeDuration.
+   * https://www.w3.org/TR/xpath-functions/#func-days-from-duration
+   *
+   * @param durationStr - Duration string
+   * @returns Integer days component
+   */
+  static daysFromDuration(durationStr: string): number {
+    const duration = Duration.parse(durationStr);
+    return duration.components.days * (duration.isNegative ? -1 : 1);
+  }
+
+  /**
+   * Get the hours component of a dayTimeDuration.
+   * https://www.w3.org/TR/xpath-functions/#func-hours-from-duration
+   *
+   * @param durationStr - Duration string
+   * @returns Integer hours component (0-23)
+   */
+  static hoursFromDuration(durationStr: string): number {
+    const duration = Duration.parse(durationStr);
+    return duration.components.hours * (duration.isNegative ? -1 : 1);
+  }
+
+  /**
+   * Get the minutes component of a dayTimeDuration.
+   * https://www.w3.org/TR/xpath-functions/#func-minutes-from-duration
+   *
+   * @param durationStr - Duration string
+   * @returns Integer minutes component (0-59)
+   */
+  static minutesFromDuration(durationStr: string): number {
+    const duration = Duration.parse(durationStr);
+    return duration.components.minutes * (duration.isNegative ? -1 : 1);
+  }
+
+  /**
+   * Get the seconds component of a dayTimeDuration.
+   * https://www.w3.org/TR/xpath-functions/#func-seconds-from-duration
+   *
+   * @param durationStr - Duration string
+   * @returns Decimal seconds component (0-59.999...)
+   */
+  static secondsFromDuration(durationStr: string): number {
+    const duration = Duration.parse(durationStr);
+    return duration.components.seconds * (duration.isNegative ? -1 : 1);
+  }
+
+  /**
+   * Get the total seconds of a dayTimeDuration as a decimal.
+   * Custom function for convenient duration calculations.
+   *
+   * @param durationStr - Duration string
+   * @returns Total seconds (positive or negative)
+   */
+  static durationToSeconds(durationStr: string): number {
+    const duration = Duration.parse(durationStr);
+    return duration.totalSeconds;
+  }
+
+  /**
+   * Get the total minutes of a dayTimeDuration as a decimal.
+   * Custom function for convenient duration calculations.
+   *
+   * @param durationStr - Duration string
+   * @returns Total minutes (positive or negative)
+   */
+  static durationToMinutes(durationStr: string): number {
+    const duration = Duration.parse(durationStr);
+    return duration.totalMinutes;
+  }
+
+  /**
+   * Get the total hours of a dayTimeDuration as a decimal.
+   * Custom function for convenient duration calculations.
+   *
+   * @param durationStr - Duration string
+   * @returns Total hours (positive or negative)
+   */
+  static durationToHours(durationStr: string): number {
+    const duration = Duration.parse(durationStr);
+    return duration.totalHours;
   }
 }
