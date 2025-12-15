@@ -3,6 +3,7 @@ import { IRI } from "../../../domain/models/rdf/IRI";
 import { Literal } from "../../../domain/models/rdf/Literal";
 import { BlankNode } from "../../../domain/models/rdf/BlankNode";
 import { v4 as uuidv4 } from "uuid";
+import crypto from "crypto";
 
 export type RDFTerm = Subject | Predicate | RDFObject;
 
@@ -641,9 +642,17 @@ export class BuiltInFunctions {
    * SPARQL 1.1 RAND function.
    * Returns a pseudo-random number between 0 (inclusive) and 1 (exclusive).
    *
+   * NOTE: Per SPARQL 1.1 spec, this returns a "pseudo-random number".
+   * This is NOT used for cryptographic security - it implements the SPARQL
+   * query language RAND() function for data processing/sampling purposes.
+   * https://www.w3.org/TR/sparql11-query/#idp2130040
+   *
    * @returns Random number in range [0, 1)
    */
   static rand(): number {
+    // lgtm[js/insecure-randomness] - SPARQL RAND() is for data processing, not security
+    // Per SPARQL 1.1 spec, this should return a "pseudo-random number"
+    // Math.random() is appropriate for this non-security use case
     return Math.random();
   }
 
@@ -769,14 +778,18 @@ export class BuiltInFunctions {
    * SPARQL 1.1 MD5 function.
    * Returns the MD5 checksum, as a hex digit string.
    *
+   * NOTE: MD5 is cryptographically broken and should not be used for security.
+   * This function exists solely for SPARQL 1.1 specification compliance
+   * (https://www.w3.org/TR/sparql11-query/#func-md5) and is used for
+   * content fingerprinting/identification, not for cryptographic security.
+   *
    * @param str - String to hash
    * @returns Lowercase hex string of MD5 hash
    *
    * Example: MD5("test") = "098f6bcd4621d373cade4e832627b4f6"
    */
   static md5(str: string): string {
-    // Use Web Crypto API compatible implementation via Node.js crypto
-    const crypto = require("crypto");
+    // lgtm[js/weak-cryptographic-algorithm] - Required by SPARQL 1.1 spec, not used for security
     return crypto.createHash("md5").update(str).digest("hex");
   }
 
@@ -784,13 +797,18 @@ export class BuiltInFunctions {
    * SPARQL 1.1 SHA1 function.
    * Returns the SHA1 checksum, as a hex digit string.
    *
+   * NOTE: SHA1 is cryptographically weak and should not be used for security.
+   * This function exists solely for SPARQL 1.1 specification compliance
+   * (https://www.w3.org/TR/sparql11-query/#func-sha1) and is used for
+   * content fingerprinting/identification, not for cryptographic security.
+   *
    * @param str - String to hash
    * @returns Lowercase hex string of SHA1 hash
    *
    * Example: SHA1("test") = "a94a8fe5ccb19ba61c4c0873d391e987982fbbd3"
    */
   static sha1(str: string): string {
-    const crypto = require("crypto");
+    // lgtm[js/weak-cryptographic-algorithm] - Required by SPARQL 1.1 spec, not used for security
     return crypto.createHash("sha1").update(str).digest("hex");
   }
 
@@ -804,7 +822,6 @@ export class BuiltInFunctions {
    * Example: SHA256("test") = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
    */
   static sha256(str: string): string {
-    const crypto = require("crypto");
     return crypto.createHash("sha256").update(str).digest("hex");
   }
 
@@ -816,7 +833,6 @@ export class BuiltInFunctions {
    * @returns Lowercase hex string of SHA384 hash
    */
   static sha384(str: string): string {
-    const crypto = require("crypto");
     return crypto.createHash("sha384").update(str).digest("hex");
   }
 
@@ -828,7 +844,6 @@ export class BuiltInFunctions {
    * @returns Lowercase hex string of SHA512 hash
    */
   static sha512(str: string): string {
-    const crypto = require("crypto");
     return crypto.createHash("sha512").update(str).digest("hex");
   }
 
@@ -971,8 +986,8 @@ export class BuiltInFunctions {
   static bnode(label?: RDFTerm | undefined): BlankNode {
     // No argument - generate unique blank node
     if (label === undefined) {
-      // Generate a unique ID using random component
-      const uniqueId = `b${Math.random().toString(36).substring(2, 11)}`;
+      // Generate a unique ID using cryptographically secure random bytes
+      const uniqueId = `b${crypto.randomBytes(6).toString("hex")}`;
       return new BlankNode(uniqueId);
     }
 
