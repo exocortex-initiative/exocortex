@@ -1,4 +1,4 @@
-import type { SPARQLQuery, SelectQuery, ConstructQuery, AskQuery } from "../SPARQLParser";
+import type { SPARQLQuery, SelectQuery, ConstructQuery, AskQuery, ExtendedDescribeQuery } from "../SPARQLParser";
 import { LateralTransformer } from "../LateralTransformer";
 import type {
   AlgebraOperation,
@@ -14,6 +14,7 @@ import type {
   SubqueryOperation,
   ConstructOperation,
   AskOperation,
+  DescribeOperation,
   ServiceOperation,
   GraphOperation,
   ExistsExpression,
@@ -57,7 +58,12 @@ export class AlgebraTranslator {
       return this.translateAsk(query as AskQuery);
     }
 
-    throw new AlgebraTranslatorError(`Query type ${query.queryType} not yet supported`);
+    if (query.queryType === "DESCRIBE") {
+      return this.translateDescribe(query as ExtendedDescribeQuery);
+    }
+
+    // TypeScript knows this is unreachable for known query types, but we keep it for safety
+    throw new AlgebraTranslatorError(`Query type ${(query as any).queryType} not yet supported`);
   }
 
   private translateSelect(query: SelectQuery): AlgebraOperation {
@@ -1293,6 +1299,79 @@ export class AlgebraTranslator {
       type: "graph",
       name,
       pattern: innerPattern,
+    };
+  }
+
+  /**
+   * Translate DESCRIBE query to DescribeOperation.
+   *
+   * DESCRIBE queries return triples that "describe" the specified resources.
+   * SPARQL 1.2 adds DEPTH and SYMMETRIC options for more control.
+   *
+   * sparqljs AST format:
+   * {
+   *   type: "query",
+   *   queryType: "DESCRIBE",
+   *   variables: [{ termType: "Variable"|"NamedNode", value: "..." }, ...] | ["*"],
+   *   where: [...] (optional)
+   * }
+   *
+   * Extended by SPARQLParser with describeOptions:
+   * {
+   *   describeOptions: { depth?: number, symmetric?: boolean }
+   * }
+   *
+   * Examples:
+   * - DESCRIBE <http://example.org/resource>
+   * - DESCRIBE ?x WHERE { ?x a :Person }
+   * - DESCRIBE ?x DEPTH 2 WHERE { ?x a :Person }
+   * - DESCRIBE ?x SYMMETRIC WHERE { ?x a :Person }
+   */
+  private translateDescribe(query: ExtendedDescribeQuery): DescribeOperation {
+    // Extract resources to describe
+    const resources: (IRI | Variable)[] = [];
+
+    // Handle DESCRIBE * (all variables from WHERE clause)
+    if (query.variables && Array.isArray(query.variables)) {
+      for (const v of query.variables) {
+        const term = v as any;
+
+        // Handle Wildcard (*) - sparqljs represents it as an object with termType="Wildcard"
+        if (term.termType === "Wildcard" || term.value === "*") {
+          // DESCRIBE * - will describe all bound variables from WHERE clause
+          // This is handled at execution time
+          continue;
+        }
+
+        if (term.termType === "Variable") {
+          resources.push({
+            type: "variable",
+            value: term.value,
+          });
+        } else if (term.termType === "NamedNode") {
+          resources.push({
+            type: "iri",
+            value: term.value,
+          });
+        }
+      }
+    }
+
+    // Translate optional WHERE clause
+    let where: AlgebraOperation | undefined;
+    if (query.where && query.where.length > 0) {
+      where = this.translateWhere(query.where);
+    }
+
+    // Extract SPARQL 1.2 options (attached by SPARQLParser)
+    const options = query.describeOptions;
+
+    return {
+      type: "describe",
+      resources,
+      where,
+      depth: options?.depth,
+      symmetric: options?.symmetric,
     };
   }
 }
