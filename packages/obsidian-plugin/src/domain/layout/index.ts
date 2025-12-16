@@ -96,3 +96,17 @@ export {
   createLayoutGroupFromFrontmatter,
   isValidGroupSortOrder,
 } from "./LayoutGroup";
+
+// LayoutActions types
+export {
+  type ActionPosition,
+  type CommandRef,
+  type LayoutActions,
+  isValidActionPosition,
+  createCommandRefFromFrontmatter,
+  createLayoutActionsFromFrontmatter,
+  isLayoutActionsFrontmatter,
+  isCommandFrontmatter,
+  isPreconditionFrontmatter,
+  isGroundingFrontmatter,
+} from "./LayoutActions";

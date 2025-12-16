@@ -25,6 +25,8 @@ import {
   type LayoutFilter,
   type LayoutSort,
   type LayoutGroup,
+  type LayoutActions,
+  type CommandRef,
   LayoutType,
   getLayoutTypeFromInstanceClass,
   isLayoutFrontmatter,
@@ -32,7 +34,9 @@ import {
   createLayoutFilterFromFrontmatter,
   createLayoutSortFromFrontmatter,
   createLayoutGroupFromFrontmatter,
+  createCommandRefFromFrontmatter,
   isValidCalendarView,
+  isValidActionPosition,
 } from "../../domain/layout";
 
 /**
@@ -237,6 +241,7 @@ export class LayoutParser {
     const filters = await this.loadFilters(frontmatter, options);
     const defaultSort = await this.loadDefaultSort(frontmatter, options);
     const groupBy = await this.loadGroupBy(frontmatter, options);
+    const actions = await this.loadActions(frontmatter, options);
 
     // Build the layout based on type
     switch (layoutType) {
@@ -250,6 +255,7 @@ export class LayoutParser {
           filters,
           defaultSort,
           groupBy,
+          actions,
           options,
         );
 
@@ -263,6 +269,7 @@ export class LayoutParser {
           filters,
           defaultSort,
           groupBy,
+          actions,
           options,
         );
 
@@ -276,6 +283,7 @@ export class LayoutParser {
           filters,
           defaultSort,
           groupBy,
+          actions,
         );
 
       case LayoutType.Calendar:
@@ -288,6 +296,7 @@ export class LayoutParser {
           filters,
           defaultSort,
           groupBy,
+          actions,
         );
 
       case LayoutType.List:
@@ -300,6 +309,7 @@ export class LayoutParser {
           filters,
           defaultSort,
           groupBy,
+          actions,
         );
 
       default:
@@ -543,6 +553,177 @@ export class LayoutParser {
     return [];
   }
 
+  /**
+   * Load LayoutActions from frontmatter wikilink.
+   */
+  private async loadActions(
+    frontmatter: IFrontmatter,
+    options: LayoutParseOptions,
+  ): Promise<LayoutActions | undefined> {
+    const actionsValue = frontmatter["exo__Layout_actions"];
+    if (!actionsValue) {
+      return undefined;
+    }
+
+    // Handle both single link and array of links (take first if array)
+    const actionsLinks = this.normalizeToArray(actionsValue);
+    if (actionsLinks.length === 0) {
+      return undefined;
+    }
+
+    const actions = await this.loadLayoutActions(actionsLinks[0], options);
+    return actions || undefined;
+  }
+
+  /**
+   * Load a LayoutActions object from a wikilink.
+   */
+  private async loadLayoutActions(
+    wikilink: string,
+    options: LayoutParseOptions,
+  ): Promise<LayoutActions | null> {
+    const file = this.resolveWikiLink(wikilink, "");
+    if (!file) {
+      return null;
+    }
+
+    const frontmatter = this.vaultAdapter.getFrontmatter(file);
+    if (!frontmatter) {
+      return null;
+    }
+
+    // Extract base properties
+    const uid = frontmatter["exo__Asset_uid"] as string | undefined;
+    const label = frontmatter["exo__Asset_label"] as string | undefined;
+    const description = frontmatter["exo__Asset_description"] as string | undefined;
+
+    if (!uid || !label) {
+      return null;
+    }
+
+    // Get command references and load them
+    const commandsValue = frontmatter["exo__LayoutActions_commands"];
+    const commandLinks = this.normalizeToArray(commandsValue);
+    const commands: CommandRef[] = [];
+
+    for (const link of commandLinks) {
+      const command = await this.loadCommand(link, options);
+      if (command) {
+        commands.push(command);
+      } else if (!options.gracefulDegradation) {
+        throw new Error(`Failed to load command: ${link}`);
+      }
+    }
+
+    // Get position with default
+    const positionValue = frontmatter["exo__LayoutActions_position"];
+    const position = isValidActionPosition(positionValue) ? positionValue : "column";
+
+    // Get showLabels with default
+    const showLabels = Boolean(frontmatter["exo__LayoutActions_showLabels"]);
+
+    return {
+      uid,
+      label,
+      description,
+      commands,
+      position,
+      showLabels,
+    };
+  }
+
+  /**
+   * Load a Command from a wikilink, including resolved precondition/grounding SPARQL.
+   */
+  private async loadCommand(
+    wikilink: string,
+    options: LayoutParseOptions,
+  ): Promise<CommandRef | null> {
+    const file = this.resolveWikiLink(wikilink, "");
+    if (!file) {
+      return null;
+    }
+
+    const frontmatter = this.vaultAdapter.getFrontmatter(file);
+    if (!frontmatter) {
+      return null;
+    }
+
+    // Create basic command ref
+    const command = createCommandRefFromFrontmatter(frontmatter);
+    if (!command) {
+      return null;
+    }
+
+    // Resolve precondition SPARQL if referenced
+    if (command.preconditionRef) {
+      const preconditionSparql = await this.loadPreconditionSparql(
+        command.preconditionRef,
+        options,
+      );
+      if (preconditionSparql) {
+        command.preconditionSparql = preconditionSparql;
+      }
+    }
+
+    // Resolve grounding SPARQL if referenced
+    if (command.groundingRef) {
+      const groundingSparql = await this.loadGroundingSparql(
+        command.groundingRef,
+        options,
+      );
+      if (groundingSparql) {
+        command.groundingSparql = groundingSparql;
+      }
+    }
+
+    return command;
+  }
+
+  /**
+   * Load precondition SPARQL from a wikilink.
+   */
+  private async loadPreconditionSparql(
+    wikilink: string,
+    _options: LayoutParseOptions,
+  ): Promise<string | null> {
+    const file = this.resolveWikiLink(wikilink, "");
+    if (!file) {
+      return null;
+    }
+
+    const frontmatter = this.vaultAdapter.getFrontmatter(file);
+    if (!frontmatter) {
+      return null;
+    }
+
+    // Get the SPARQL query from the precondition
+    const sparql = frontmatter["exo__Precondition_sparql"] as string | undefined;
+    return sparql || null;
+  }
+
+  /**
+   * Load grounding SPARQL from a wikilink.
+   */
+  private async loadGroundingSparql(
+    wikilink: string,
+    _options: LayoutParseOptions,
+  ): Promise<string | null> {
+    const file = this.resolveWikiLink(wikilink, "");
+    if (!file) {
+      return null;
+    }
+
+    const frontmatter = this.vaultAdapter.getFrontmatter(file);
+    if (!frontmatter) {
+      return null;
+    }
+
+    // Get the SPARQL query from the grounding
+    const sparql = frontmatter["exo__Grounding_sparql"] as string | undefined;
+    return sparql || null;
+  }
+
   // ============================================
   // Layout Type Builders
   // ============================================
@@ -556,6 +737,7 @@ export class LayoutParser {
     filters: LayoutFilter[] | undefined,
     defaultSort: LayoutSort | undefined,
     groupBy: LayoutGroup | undefined,
+    actions: LayoutActions | undefined,
     options: LayoutParseOptions,
   ): Promise<TableLayout> {
     const columns = await this.loadColumns(frontmatter, options);
@@ -570,6 +752,7 @@ export class LayoutParser {
       filters,
       defaultSort,
       groupBy,
+      actions,
     };
   }
 
@@ -582,6 +765,7 @@ export class LayoutParser {
     filters: LayoutFilter[] | undefined,
     defaultSort: LayoutSort | undefined,
     groupBy: LayoutGroup | undefined,
+    actions: LayoutActions | undefined,
     options: LayoutParseOptions,
   ): Promise<KanbanLayout | null> {
     const laneProperty = frontmatter["exo__KanbanLayout_laneProperty"] as string | undefined;
@@ -607,6 +791,7 @@ export class LayoutParser {
       filters,
       defaultSort,
       groupBy,
+      actions,
     };
   }
 
@@ -619,6 +804,7 @@ export class LayoutParser {
     filters: LayoutFilter[] | undefined,
     defaultSort: LayoutSort | undefined,
     groupBy: LayoutGroup | undefined,
+    actions: LayoutActions | undefined,
   ): GraphLayout {
     const nodeLabel = frontmatter["exo__GraphLayout_nodeLabel"] as string | undefined;
     const edgePropertiesValue = frontmatter["exo__GraphLayout_edgeProperties"];
@@ -639,6 +825,7 @@ export class LayoutParser {
       filters,
       defaultSort,
       groupBy,
+      actions,
     };
   }
 
@@ -651,6 +838,7 @@ export class LayoutParser {
     filters: LayoutFilter[] | undefined,
     defaultSort: LayoutSort | undefined,
     groupBy: LayoutGroup | undefined,
+    actions: LayoutActions | undefined,
   ): CalendarLayout | null {
     const startProperty = frontmatter["exo__CalendarLayout_startProperty"] as string | undefined;
     if (!startProperty) {
@@ -673,6 +861,7 @@ export class LayoutParser {
       filters,
       defaultSort,
       groupBy,
+      actions,
     };
   }
 
@@ -685,6 +874,7 @@ export class LayoutParser {
     filters: LayoutFilter[] | undefined,
     defaultSort: LayoutSort | undefined,
     groupBy: LayoutGroup | undefined,
+    actions: LayoutActions | undefined,
   ): ListLayout {
     const template = frontmatter["exo__ListLayout_template"] as string | undefined;
     const showIcon = frontmatter["exo__ListLayout_showIcon"] as boolean | undefined;
@@ -700,6 +890,7 @@ export class LayoutParser {
       filters,
       defaultSort,
       groupBy,
+      actions,
     };
   }
 }

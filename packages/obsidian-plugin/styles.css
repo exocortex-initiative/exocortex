@@ -4372,3 +4372,183 @@
     transform: none;
   }
 }
+
+/* ========================================
+   Action Buttons Styles
+   ======================================== */
+
+.exo-action-buttons {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+/* Position variants */
+.exo-action-buttons-column {
+  justify-content: flex-start;
+}
+
+.exo-action-buttons-inline {
+  display: inline-flex;
+  margin-left: 8px;
+}
+
+.exo-action-buttons-hover {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+tr:hover .exo-action-buttons-hover,
+.exo-layout-row:hover .exo-action-buttons-hover {
+  opacity: 1;
+}
+
+/* Action button base styles */
+.exo-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 8px;
+  min-width: 28px;
+  min-height: 28px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background-color: var(--background-secondary);
+  color: var(--text-normal);
+  font-size: 0.85em;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.exo-action-button:hover:not(:disabled) {
+  background-color: var(--background-secondary-alt);
+  border-color: var(--background-modifier-border);
+}
+
+.exo-action-button:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.exo-action-button:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+}
+
+/* Disabled state */
+.exo-action-button:disabled,
+.exo-action-button-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Loading state */
+.exo-action-button-loading {
+  pointer-events: none;
+}
+
+.exo-action-button-loading .exo-action-icon {
+  opacity: 0.3;
+}
+
+/* Icon styles */
+.exo-action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+/* Lucide icon integration */
+.exo-action-icon::before {
+  font-family: "lucide";
+  font-size: 14px;
+}
+
+/* Common icon mappings */
+.exo-action-icon.lucide-play-circle::before { content: "\e95a"; }
+.exo-action-icon.lucide-play::before { content: "\e958"; }
+.exo-action-icon.lucide-square::before { content: "\ea38"; }
+.exo-action-icon.lucide-stop-circle::before { content: "\ea3c"; }
+.exo-action-icon.lucide-check::before { content: "\e8f6"; }
+.exo-action-icon.lucide-check-circle::before { content: "\e8f4"; }
+.exo-action-icon.lucide-x::before { content: "\eabc"; }
+.exo-action-icon.lucide-x-circle::before { content: "\eaba"; }
+.exo-action-icon.lucide-pause::before { content: "\e93a"; }
+.exo-action-icon.lucide-pause-circle::before { content: "\e938"; }
+.exo-action-icon.lucide-rotate-cw::before { content: "\e9a0"; }
+.exo-action-icon.lucide-trash-2::before { content: "\ea7c"; }
+.exo-action-icon.lucide-pencil::before { content: "\e944"; }
+.exo-action-icon.lucide-loader-2::before { content: "\e8d4"; }
+.exo-action-icon.lucide-circle::before { content: "\e8fe"; }
+
+/* Label styles */
+.exo-action-label {
+  white-space: nowrap;
+}
+
+/* Spinner animation */
+.exo-action-spinner {
+  animation: exo-spin 1s linear infinite;
+}
+
+@keyframes exo-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Table cell integration */
+.exo-layout-cell-actions {
+  padding: 4px;
+  text-align: center;
+}
+
+/* Compact variant (icon-only mode) */
+.exo-action-buttons:not([data-show-labels="true"]) .exo-action-button {
+  padding: 4px;
+}
+
+/* Action button colors by type */
+.exo-action-button[data-action="start"] {
+  color: var(--color-green);
+}
+
+.exo-action-button[data-action="stop"] {
+  color: var(--color-orange);
+}
+
+.exo-action-button[data-action="complete"] {
+  color: var(--color-cyan);
+}
+
+.exo-action-button[data-action="delete"] {
+  color: var(--color-red);
+}
+
+/* High contrast mode */
+@media (prefers-contrast: more) {
+  .exo-action-button {
+    border: 2px solid var(--text-muted);
+  }
+
+  .exo-action-button:hover:not(:disabled) {
+    border-color: var(--interactive-accent);
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .exo-action-button {
+    transition: none;
+  }
+
+  .exo-action-buttons-hover {
+    opacity: 1;
+    transition: none;
+  }
+
+  .exo-action-spinner {
+    animation: none;
+  }
+}
