@@ -91,9 +91,13 @@ export interface DisplayNameSettings {
 
 /**
  * Default display name configuration
+ *
+ * The defaultTemplate applies to ALL asset types not explicitly listed in classTemplates.
+ * It uses the "label (class)" format to provide consistent, readable display names
+ * across all asset types in the Properties block.
  */
 export const DEFAULT_DISPLAY_NAME_SETTINGS: DisplayNameSettings = {
-  defaultTemplate: "{{exo__Asset_label}}",
+  defaultTemplate: "{{exo__Asset_label}} ({{exo__Instance_class}})",
 
   classTemplates: {
     "ems__TaskPrototype": "{{exo__Asset_label}} (TaskPrototype)",
@@ -102,6 +106,8 @@ export const DEFAULT_DISPLAY_NAME_SETTINGS: DisplayNameSettings = {
     "ems__Area": "{{exo__Asset_label}}",
     "ems__MeetingPrototype": "{{exo__Asset_label}} (MeetingPrototype)",
     "ems__Meeting": "{{exo__Asset_label}} {{statusEmoji}}",
+    // DailyNote uses the basename (date) as its display name since it typically doesn't have a label
+    "pn__DailyNote": "{{_basename}}",
   },
 
   statusEmojis: {
@@ -161,7 +167,7 @@ export const DEFAULT_SETTINGS: ExocortexSettings = {
   showLabelsInFileExplorer: true,
   showLabelsInTabTitles: true,
   showLabelsInProperties: true,
-  displayNameTemplate: "{{exo__Asset_label}}",
+  displayNameTemplate: "{{exo__Asset_label}} ({{exo__Instance_class}})",
   sortByDisplayName: false,
   displayNameSettings: DEFAULT_DISPLAY_NAME_SETTINGS,
   webhookSettings: DEFAULT_WEBHOOK_SETTINGS,
