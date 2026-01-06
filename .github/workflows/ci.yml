@@ -509,11 +509,11 @@ jobs:
           if-no-files-found: ignore
 
   # E2E tests with sharding for faster execution
-  # Target: 5 minutes (down from 15 minutes)
+  # Target: 8 minutes per shard (increased from 5 to reduce flaky cancellations - Issue #1384)
   # Note: Named e2e-shard-* to avoid conflict with branch protection rule for "e2e-tests"
   e2e-shard:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     needs: build
     strategy:
       fail-fast: false
@@ -542,6 +542,17 @@ jobs:
           tags: exocortex-e2e:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Log diagnostic info
+        run: |
+          echo "=== E2E Shard ${{ matrix.shard }}/4 Diagnostic Info ==="
+          echo "Runner: $RUNNER_NAME"
+          echo "Runner OS: $RUNNER_OS"
+          echo "Time: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "Available memory: $(free -m 2>/dev/null | head -2 || echo 'N/A')"
+          echo "Available disk: $(df -h . | tail -1 || echo 'N/A')"
+          echo "CPU info: $(nproc) cores"
+          echo "============================================="
 
       - name: Run E2E tests (shard ${{ matrix.shard }}/4)
         run: |
