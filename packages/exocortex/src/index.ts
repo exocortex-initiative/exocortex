@@ -183,7 +183,7 @@ export {
 } from "./infrastructure/rdf/RDFSerializer";
 export { InMemoryTripleStore } from "./infrastructure/rdf/InMemoryTripleStore";
 export { RDFVocabularyMapper } from "./infrastructure/rdf/RDFVocabularyMapper";
-export { NoteToRDFConverter } from "./services/NoteToRDFConverter";
+export { NoteToRDFConverter, type Exo003UuidMapping } from "./services/NoteToRDFConverter";
 
 // SPARQL Engine exports
 export { SPARQLParser, SPARQLParseError, type SPARQLQuery, type SelectQuery, type ConstructQuery, type Update, type UpdateOperation, type ExtendedDescribeQuery, type ParseResult } from "./infrastructure/sparql/SPARQLParser";
@@ -305,6 +305,25 @@ export type { IEventBus } from "./interfaces/IEventBus";
 export type { IConfiguration } from "./interfaces/IConfiguration";
 export type { INotificationService } from "./interfaces/INotificationService";
 export { DI_TOKENS, type DIToken } from "./interfaces/tokens";
+
+// UI Provider exports (CLI/Obsidian abstraction)
+export {
+  HeadlessError,
+  type IUIProvider,
+  type ModalOptions,
+  type SelectOptions,
+} from "./domain/ports/IUIProvider";
+
+// Action Types exports
+export type { ActionContext } from "./domain/types/ActionContext";
+export type {
+  ActionResult,
+  ActionDefinition,
+  ActionHandler,
+} from "./domain/types/ActionTypes";
+
+// Action Interpreter export
+export { ActionInterpreter } from "./domain/services/ActionInterpreter";
 
 // DI Container exports
 export {
